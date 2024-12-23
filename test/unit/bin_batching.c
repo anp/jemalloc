@@ -214,7 +214,7 @@ TEST_END
 
 static void
 test_fork_main_fn() {
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__Fuchsia__)
 	pid_t pid = fork();
 	if (pid == -1) {
 		test_fail("Fork failure!");
@@ -230,8 +230,8 @@ test_fork_main_fn() {
 }
 
 TEST_BEGIN(test_fork) {
-#ifdef _WIN32
-	test_skip("No fork on windows");
+#if defined(_WIN32) || defined(__Fuchsia__)
+	test_skip("No fork on windows or fuchsia");
 #endif
 	test_skip_if(should_skip());
 	stress_run(&test_fork_main_fn, /* nruns */ 10);

@@ -16,6 +16,12 @@
 #ifdef __NetBSD__
 #include <sys/bitops.h>	/* ilog2 */
 #endif
+#if defined(__Fuchsia__)
+#include <zircon/process.h>
+#include <zircon/syscalls.h>
+#include <zircon/types.h>
+#endif
+
 #ifdef JEMALLOC_HAVE_VM_MAKE_TAG
 #define PAGES_FD_TAG VM_MAKE_TAG(254U)
 #else
@@ -121,6 +127,25 @@ static int os_page_id(void *addr, size_t size, const char *name)
 }
 #endif
 
+#if defined(__Fuchsia__)
+// Fuchsia's libc headers don't yet expose ilog2, roll our own and turn it into a map flag.
+// FIXME remove always inline without causing weird linker errors
+JEMALLOC_ATTR(__always_inline__) zx_vm_option_t zx_align_flag(size_t alignment) {
+	zx_vm_option_t ret = 0;
+	int shift = -1;
+	while (alignment) {
+		alignment >>= 1;
+		shift += 1;
+	}
+
+	// Zircon only supports alignments 1KB through 4GB
+	if (shift >= 10 && shift <= 32) {
+		ret |= ((zx_vm_option_t)(shift << ZX_VM_ALIGN_BASE));
+	}
+	return ret;
+}
+#endif
+
 /******************************************************************************/
 /*
  * Function prototypes for static functions that are referenced prior to
@@ -150,6 +175,45 @@ os_pages_map(void *addr, size_t size, size_t alignment, bool *commit) {
 	ret = VirtualAlloc(addr, size, MEM_RESERVE | (*commit ? MEM_COMMIT : 0),
 	    PAGE_READWRITE);
 #else
+#ifdef __Fuchsia__
+    zx_handle_t vmo;
+	ret = MAP_FAILED;
+	zx_status_t create_res = zx_vmo_create(size, 0, &vmo);
+	// VMO creation should ~never fail.
+	assert(create_res == ZX_OK);
+
+#ifdef JEMALLOC_PAGEID
+	// Don't fail the allocation if naming fails, it shouldn't ever fail anyways.
+	const char* name = "jemalloc";
+	zx_object_set_property(vmo, ZX_PROP_NAME, name, strlen(name));
+#endif
+
+	zx_vm_option_t map_flags = ZX_VM_PERM_READ | ZX_VM_PERM_WRITE | ZX_VM_ALLOW_FAULTS;
+	if (addr != NULL) {
+		map_flags |= ZX_VM_SPECIFIC;
+	} else if (alignment > os_page) {
+		map_flags |= zx_align_flag(alignment);
+	}
+
+	zx_vaddr_t map_out;
+	zx_status_t map_res = zx_vmar_map(zx_vmar_root_self(), map_flags, (zx_vaddr_t)addr, vmo, 0, size, &map_out);
+	assert(map_res != ZX_ERR_BAD_HANDLE);
+	assert(map_res != ZX_ERR_WRONG_TYPE);
+	assert(map_res != ZX_ERR_BAD_STATE);
+	assert(map_res != ZX_ERR_NOT_SUPPORTED);
+	assert(map_res != ZX_ERR_BUFFER_TOO_SMALL);
+
+	if (map_res == ZX_OK) {
+		ret = (void*)map_out;
+
+		if (commit) {
+			// FIXME figure out the ZIRCON KERNEL OOPS this seems to cause
+			// zx_vmar_op_range(zx_vmar_root_self(), ZX_VMAR_OP_COMMIT, map_out, size, NULL, 0);
+		}
+	}
+
+	zx_handle_close(vmo);
+#else
 	/*
 	 * We don't use MAP_FIXED here, because it can cause the *replacement*
 	 * of existing mappings, and we only want to create new mappings.
@@ -173,6 +237,7 @@ os_pages_map(void *addr, size_t size, size_t alignment, bool *commit) {
 		ret = mmap(addr, size, prot, flags, PAGES_FD_TAG, 0);
 	}
 	assert(ret != NULL);
+#endif
 
 	if (ret == MAP_FAILED) {
 		ret = NULL;
@@ -352,6 +417,10 @@ os_pages_commit(void *addr, size_t size, bool commit) {
 #ifdef _WIN32
 	return (commit ? (addr != VirtualAlloc(addr, size, MEM_COMMIT,
 	    PAGE_READWRITE)) : (!VirtualFree(addr, size, MEM_DECOMMIT)));
+#elif defined(__Fuchsia__)
+	return zx_vmar_op_range(zx_vmar_root_self(),
+		commit ? ZX_VMAR_OP_COMMIT : ZX_VMAR_OP_DECOMMIT, (zx_vaddr_t)addr,
+		size, NULL, 0) != ZX_OK;
 #else
 	{
 		int prot = commit ? PAGES_PROT_COMMIT : PAGES_PROT_DECOMMIT;
@@ -806,7 +875,7 @@ pages_boot(void) {
 		mmap_flags |= MAP_NORESERVE;
 	}
 #  endif
-#elif defined(__NetBSD__)
+#elif defined(__NetBSD__) || defined(__Fuchsia__)
 	os_overcommits = true;
 #else
 	os_overcommits = false;

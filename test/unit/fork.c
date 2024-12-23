@@ -2,7 +2,7 @@
 #include "test/fork.h"
 
 TEST_BEGIN(test_fork) {
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__Fuchsia__)
 	void *p;
 	pid_t pid;
 
@@ -40,12 +40,12 @@ TEST_BEGIN(test_fork) {
 		fork_wait_for_child_exit(pid);
 	}
 #else
-	test_skip("fork(2) is irrelevant to Windows");
+	test_skip("fork(2) is irrelevant to Windows and Fuchsia");
 #endif
 }
 TEST_END
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__Fuchsia__)
 static void *
 do_fork_thd(void *arg) {
 	malloc(1);
@@ -66,7 +66,7 @@ do_fork_thd(void *arg) {
 }
 #endif
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__Fuchsia__)
 static void
 do_test_fork_multithreaded(void) {
 	thd_t child;
@@ -77,7 +77,7 @@ do_test_fork_multithreaded(void) {
 #endif
 
 TEST_BEGIN(test_fork_multithreaded) {
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__Fuchsia__)
 	/*
 	 * We've seen bugs involving hanging on arenas_lock (though the same
 	 * class of bugs can happen on any mutex).  The bugs are intermittent
@@ -101,7 +101,7 @@ TEST_BEGIN(test_fork_multithreaded) {
 		}
 	}
 #else
-	test_skip("fork(2) is irrelevant to Windows");
+	test_skip("fork(2) is irrelevant to Windows and Fuchsia");
 #endif
 }
 TEST_END

@@ -847,6 +847,17 @@ case "${host}" in
   force_tls="0"
   AC_DEFINE([JEMALLOC_HAS_ALLOCA_H], [ ], [ ])
 	;;
+  *-*-fuchsia)
+	abi="elf"
+	glibc="0"
+	is_fuchsia="1"
+	AC_DEFINE([JEMALLOC_HAS_ALLOCA_H], [ ], [ ])
+	AC_DEFINE([JEMALLOC_THREADED_INIT], [ ], [ ])
+	AC_DEFINE([JEMALLOC_C11_ATOMICS], [ ], [ ])
+	AC_DEFINE([JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS], [ ], [ ])
+	dnl No need to check for pointer size here, Fuchsia is always 64bit.
+	default_retain="1"
+	;;
   *)
 	AC_MSG_RESULT([Unsupported operating system: ${host}])
 	abi="elf"
@@ -959,8 +970,11 @@ JE_COMPILABLE([format(gnu_printf, ...) attribute], [#include <stdlib.h>],
               [void *foo(const char *format, ...) __attribute__((format(gnu_printf, 1, 2)));],
               [je_cv_format_gnu_printf])
 JE_CFLAGS_RESTORE()
-if test "x${je_cv_format_gnu_printf}" = "xyes" ; then
-  AC_DEFINE([JEMALLOC_HAVE_ATTR_FORMAT_GNU_PRINTF], [ ], [ ])
+dnl Unclear why this is a warning and not an error with Fuchsia's toolchain.
+if test "x$is_fuchsia" = "x"; then
+  if test "x${je_cv_format_gnu_printf}" = "xyes" ; then
+    AC_DEFINE([JEMALLOC_HAVE_ATTR_FORMAT_GNU_PRINTF], [ ], [ ])
+  fi
 fi
 dnl Check for format(printf, ...) attribute support.
 JE_CFLAGS_SAVE()
@@ -2002,8 +2016,11 @@ dnl Check if we have dlsym support.
 ], [
   pthread_atfork((void *)0, (void *)0, (void *)0);
 ], [je_cv_pthread_atfork])
-  if test "x${je_cv_pthread_atfork}" = "xyes" ; then
-    AC_DEFINE([JEMALLOC_HAVE_PTHREAD_ATFORK], [ ], [ ])
+  dnl This function exists on Fuchsia but always returns an error, skip check there.
+  if test "x$is_fuchsia" = "x"; then
+    if test "x${je_cv_pthread_atfork}" = "xyes" ; then
+      AC_DEFINE([JEMALLOC_HAVE_PTHREAD_ATFORK], [ ], [ ])
+    fi
   fi
   dnl Check if pthread_setname_np is available with the expected API.
   JE_COMPILABLE([pthread_setname_np(3)], [
@@ -2175,30 +2192,39 @@ if test "x$have_secure_getenv" = "x1" ; then
 fi
 
 dnl Check if the GNU-specific sched_getcpu function exists.
-AC_CHECK_FUNC([sched_getcpu],
-              [have_sched_getcpu="1"],
-              [have_sched_getcpu="0"]
-             )
-if test "x$have_sched_getcpu" = "x1" ; then
-  AC_DEFINE([JEMALLOC_HAVE_SCHED_GETCPU], [ ], [ ])
+dnl This function exists on Fuchsia but always returns an error, skip check there.
+if test "x$is_fuchsia" = "x"; then
+  AC_CHECK_FUNC([sched_getcpu],
+                [have_sched_getcpu="1"],
+                [have_sched_getcpu="0"]
+              )
+  if test "x$have_sched_getcpu" = "x1" ; then
+    AC_DEFINE([JEMALLOC_HAVE_SCHED_GETCPU], [ ], [ ])
+  fi
 fi
 
 dnl Check if the GNU-specific sched_setaffinity function exists.
-AC_CHECK_FUNC([sched_setaffinity],
-              [have_sched_setaffinity="1"],
-              [have_sched_setaffinity="0"]
-             )
-if test "x$have_sched_setaffinity" = "x1" ; then
-  AC_DEFINE([JEMALLOC_HAVE_SCHED_SETAFFINITY], [ ], [ ])
+dnl This function exists on Fuchsia but always returns an error, skip check there.
+if test "x$is_fuchsia" = "x"; then
+  AC_CHECK_FUNC([sched_setaffinity],
+                [have_sched_setaffinity="1"],
+                [have_sched_setaffinity="0"]
+              )
+  if test "x$have_sched_setaffinity" = "x1" ; then
+    AC_DEFINE([JEMALLOC_HAVE_SCHED_SETAFFINITY], [ ], [ ])
+  fi
 fi
 
 dnl Check if the pthread_setaffinity_np function exists.
-AC_CHECK_FUNC([pthread_setaffinity_np],
-              [have_pthread_setaffinity_np="1"],
-              [have_pthread_setaffinity_np="0"]
-             )
-if test "x$have_pthread_setaffinity_np" = "x1" ; then
-  AC_DEFINE([JEMALLOC_HAVE_PTHREAD_SETAFFINITY_NP], [ ], [ ])
+dnl This function exists on Fuchsia but always returns an error, skip check there.
+if test "x$is_fuchsia" = "x"; then
+  AC_CHECK_FUNC([pthread_setaffinity_np],
+                [have_pthread_setaffinity_np="1"],
+                [have_pthread_setaffinity_np="0"]
+              )
+  if test "x$have_pthread_setaffinity_np" = "x1" ; then
+    AC_DEFINE([JEMALLOC_HAVE_PTHREAD_SETAFFINITY_NP], [ ], [ ])
+  fi
 fi
 
 dnl Check if the Solaris/BSD issetugid function exists.

@@ -189,6 +189,13 @@ nstime_get(nstime_t *time) {
 
 	nstime_init(time, ticks_100ns * 100);
 }
+#elif defined(__Fuchsia__)
+#include <zircon/syscalls.h>
+#  define NSTIME_MONOTONIC true
+static void
+nstime_get(nstime_t *time) {
+	nstime_init(time, zx_clock_get_monotonic());	
+}
 #elif defined(JEMALLOC_HAVE_CLOCK_MONOTONIC_COARSE)
 #  define NSTIME_MONOTONIC true
 static void
