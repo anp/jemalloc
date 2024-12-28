@@ -615,8 +615,9 @@ struct cache_bin_fill_ctl_s {
  * for the nflush parameter in tcache_bin_flush_impl()).
  * This is to avoid stack overflow when we do batch edata look up, which
  * reserves a nflush * sizeof(emap_batch_lookup_result_t) stack variable.
+ * emap_batch_lookup_result_t contains two pointers.
  */
-#define CACHE_BIN_NFLUSH_BATCH_MAX (VARIABLE_ARRAY_SIZE_MAX >> LG_SIZEOF_PTR)
+#define CACHE_BIN_NFLUSH_BATCH_MAX (VARIABLE_ARRAY_SIZE_MAX >> (LG_SIZEOF_PTR + 1))
 
 /*
  * Filling and flushing are done in batch, on arrays of void *s.  For filling,
