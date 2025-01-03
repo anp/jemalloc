@@ -209,7 +209,7 @@ static uint8_t	malloc_slow_flags;
 #  define NO_INITIALIZER	((unsigned long)0)
 #  define INITIALIZER		pthread_self()
 #  define IS_INITIALIZER	(malloc_initializer == pthread_self())
-static pthread_t		malloc_initializer = NO_INITIALIZER;
+static pthread_t		malloc_initializer = (pthread_t)NO_INITIALIZER;
 #else
 #  define NO_INITIALIZER	false
 #  define INITIALIZER		true
